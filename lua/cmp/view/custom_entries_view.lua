@@ -122,12 +122,26 @@ custom_entries_view.open = function(self, offset, entries)
   self.entries = {}
   self.column_width = { abbr = 0, kind = 0, menu = 0 }
 
+  local cmdtype = vim.fn.getcmdtype()
   local entries_buf = self.entries_win:get_buffer()
   local lines = {}
   local dedup = {}
   local preselect_index = 0
   for _, e in ipairs(entries) do
     local view = e:get_view(offset, entries_buf)
+    local len = view.abbr.width + view.kind.width + view.menu.width
+    if cmdtype == '/' or cmdtype == ':' then
+      if len > 62 then
+        view.abbr.text = view.abbr.text:sub(62 - string.len(view.kind.width .. view.menu.width))
+        view.abbr.bytes = #view.abbr.text
+        view.abbr.width = vim.fn.strdisplaywidth(view.abbr.text)
+      elseif len < 62 then
+        view.abbr.text = view.abbr.text .. string.rep(' ', 60 - len, '')
+        view.abbr.bytes = #view.abbr.text
+        view.abbr.width = vim.fn.strdisplaywidth(view.abbr.text)
+      end
+    end
+
     if view.dup == 1 or not dedup[e.completion_item.label] then
       dedup[e.completion_item.label] = true
       self.column_width.abbr = math.max(self.column_width.abbr, view.abbr.width)
@@ -156,7 +170,15 @@ custom_entries_view.open = function(self, offset, entries)
   local pos = api.get_screen_cursor()
   local cursor_before_line = api.get_cursor_before_line()
   local delta = vim.fn.strdisplaywidth(cursor_before_line:sub(self.offset))
-  local row, col = pos[1], pos[2] - delta - 1
+  local col, row
+
+  if cmdtype == '/' then
+    row, col = pos[1] + 1, pos[2] - delta - 6
+  elseif cmdtype == ':' then
+    row, col = pos[1] + 1, pos[2] - delta - 4
+  else
+    row, col = pos[1], pos[2] - delta - 1
+  end
 
   local border_info = window.get_border_info({ style = completion })
   local border_offset_row = border_info.top + border_info.bottom
